@@ -1,6 +1,7 @@
+import json
 import pandas as pd
 import joblib
-import json
+import paho.mqtt.client as mqtt
 
 # --------------------------------------------------
 # 1. LOAD MODEL + THRESHOLDS
@@ -56,7 +57,7 @@ def assess_stress_level(temp, humidity):
         return "NORMAL RANGE", score
 
 # --------------------------------------------------
-# 4. FULL SYSTEM (NO PRESSURE)
+# 4. FULL SYSTEM
 # --------------------------------------------------
 def plant_system(temp, humidity):
     env_status = decide_environment_status(temp, humidity, thresholds)
@@ -67,19 +68,57 @@ def plant_system(temp, humidity):
         "humidity": humidity,
         "environment_status": env_status,
         "stress_level": stress_level,
-        "stress_score": stress_score
+        "stress_score": float(stress_score)
     }
 
 # --------------------------------------------------
-# 5. MQTT HANDLER (CLEAN VERSION)
+# 5. MQTT SETTINGS
 # --------------------------------------------------
-def on_message(client, userdata, msg):
-    if msg.topic == "sensor/bme280":
-        data = json.loads(msg.payload.decode())
+MQTT_BROKER = "10.130.28.211"     # change if needed
+MQTT_PORT = 1883
+MQTT_TOPIC = "plant/sensors"
 
-        temp = data["temperature"]
-        humidity = data["humidity"]
+# --------------------------------------------------
+# 6. MQTT CALLBACKS
+# --------------------------------------------------
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connected to MQTT broker")
+        client.subscribe(MQTT_TOPIC)
+        print(f"Subscribed to topic: {MQTT_TOPIC}")
+    else:
+        print(f"Failed to connect, return code {rc}")
+
+def on_message(client, userdata, msg):
+    try:
+        payload = msg.payload.decode()
+        print(f"\nReceived MQTT message: {payload}")
+
+        data = json.loads(payload)
+
+        temp = float(data["temperature"])
+        humidity = float(data["humidity"])
 
         result = plant_system(temp, humidity)
 
-        print("Result:", result)
+        print("Plant assessment:")
+        print(result)
+
+    except KeyError as e:
+        print(f"Missing expected key in MQTT data: {e}")
+    except json.JSONDecodeError:
+        print("Message was not valid JSON")
+    except Exception as e:
+        print(f"Error processing message: {e}")
+
+# --------------------------------------------------
+# 7. START MQTT CLIENT
+# --------------------------------------------------
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+
+client.connect(MQTT_BROKER, MQTT_PORT, 60)
+
+print("Waiting for MQTT messages...")
+client.loop_forever()
