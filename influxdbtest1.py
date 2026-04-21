@@ -2,8 +2,7 @@ import json
 import pandas as pd
 import joblib
 import paho.mqtt.client as mqtt
-from influxdb_client import InfluxDBClient, Point
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb import InfluxDBClient
 
 # --------------------------------------------------
 # 1. LOAD MODEL + THRESHOLDS
@@ -14,17 +13,18 @@ thresholds = joblib.load("plant_thresholds.pkl")
 # --------------------------------------------------
 # 2. INFLUXDB SETTINGS
 # --------------------------------------------------
-INFLUX_URL = "http://localhost:8086"   # use localhost if InfluxDB is on the Pi
-INFLUX_TOKEN = "YOUR_INFLUXDB_TOKEN"
-INFLUX_ORG = "YOUR_ORG"
-INFLUX_BUCKET = "plant_data"
+INFLUX_HOST = "10.94.83.1"     # laptop IP if InfluxDB is on laptop
+INFLUX_PORT = 8086
+INFLUX_DB = "plant_data"
 
 influx_client = InfluxDBClient(
-    url=INFLUX_URL,
-    token=INFLUX_TOKEN,
-    org=INFLUX_ORG
+    host=INFLUX_HOST,
+    port=INFLUX_PORT
 )
-write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+
+# create database if needed
+influx_client.create_database(INFLUX_DB)
+influx_client.switch_database(INFLUX_DB)
 
 # --------------------------------------------------
 # 3. RULE-BASED LOGIC
@@ -104,22 +104,28 @@ def plant_system(temp, humidity):
 # 7. WRITE TO INFLUXDB
 # --------------------------------------------------
 def write_to_influx(result):
-    point = (
-        Point("plant_monitor")
-        .field("temperature", float(result["temperature"]))
-        .field("humidity", float(result["humidity"]))
-        .field("stress_score", float(result["stress_score"]))
-        .field("stress_level_code", int(result["stress_level_code"]))
-        .tag("environment_status", result["environment_status"])
-        .tag("stress_level", result["stress_level"])
-    )
+    json_body = [
+        {
+            "measurement": "plant_monitor",
+            "tags": {
+                "environment_status": result["environment_status"],
+                "stress_level": result["stress_level"]
+            },
+            "fields": {
+                "temperature": float(result["temperature"]),
+                "humidity": float(result["humidity"]),
+                "stress_score": float(result["stress_score"]),
+                "stress_level_code": int(result["stress_level_code"])
+            }
+        }
+    ]
 
-    write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
+    influx_client.write_points(json_body)
 
 # --------------------------------------------------
 # 8. MQTT SETTINGS
 # --------------------------------------------------
-MQTT_BROKER = "10.94.83.211"     # change if needed
+MQTT_BROKER = "10.94.83.211"
 MQTT_PORT = 1883
 MQTT_TOPIC = "sensor/bme280"
 
