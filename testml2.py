@@ -74,9 +74,9 @@ def plant_system(temp, humidity):
 # --------------------------------------------------
 # 5. MQTT SETTINGS
 # --------------------------------------------------
-MQTT_BROKER = "10.130.28.211"     # change if needed
+MQTT_BROKER = "10.94.83.211"     # change if needed
 MQTT_PORT = 1883
-MQTT_TOPIC = "plant/sensors"
+MQTT_TOPIC = "sensor/bme280"
 
 # --------------------------------------------------
 # 6. MQTT CALLBACKS
