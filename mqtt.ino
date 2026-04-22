@@ -1,21 +1,31 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
+//get the pins for the bme280
+#define SDA_PIN 21
+#define SCL_PIN 22
 
 //Hotspot wifi name and password
 const char* ssid = "aichikawInt";
 const char* password = "AlanPass123";
 //IP address of raspberry pi
-const char* mqtt_server = "10.130.28.211";   
+const char* mqtt_server = "10.94.83.211";   
 
 //creates the socket
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+//creates the bme280 object
+Adafruit_BME280 bme;
+
 //initialize the variables(may not use all of them will decide later)
 unsigned long lastMsg = 0;
 float fakeMoisture = 0;
 float tempRead = 0;
-float pressureRead = 0;
+// float pressureRead = 0;
 float humidRead = 0;
 
 
@@ -61,10 +71,23 @@ void reconnect() {
 void setup() {
   //send at 115200 bits per second
   Serial.begin(115200);
+  delay(1000);
   //connect to internet
   setup_wifi();
   //create a mqtt server
   client.setServer(mqtt_server, 1883);
+
+  //get the sensors started
+  Wire.begin(SDA_PIN, SCL_PIN);
+
+  //AI was used for this
+  if (!bme.begin(0x76)){
+    Serial.println("Trying 0x77...");
+    if(!bme.begin(0x77)) {
+      Serial.println("Could not find the sensor");
+      while(1);
+    }
+  }
 }
 
 void loop() {
@@ -79,36 +102,24 @@ void loop() {
 
     //Get the readings
     tempRead = bme.readTemperature();
-    pressureRead = bme.readPressure();
-    humidRead = bme.readHumidity() / 100.0F;
-
-    // char moistRes[16];
-    char tempRes[16];
-    char pressRes[16];
-    char humiRes[16];
-
-    // sprintf(moistRes, "%d", fakeMoisture);
-    //get the reading and put into string
-    sprintf(tempRes, "%d", tempRead);
-    sprintf(pressRes, "%d", pressureRead);
-    sprintf(humiRes, "%d", humidRead);
-
-    // Serial.print("Publishing fake moisture: ");
-    // Serial.println(moistRes);
-    // client.publish("plant/soilMoisture", fakeMoisture);
+    // pressureRead = bme.readPressure() / 100.0F;
+    humidRead = bme.readHumidity();
 
     //print all the readings just to test
     Serial.print("Displaying temperature reading: ");
-    Serial.println(tempRes);
-    Serial.print("Displaying pressure reading: ");
-    Serial.println(pressRes);
+    Serial.println(tempRead);
+    // Serial.print("Displaying pressure reading: ");
+    // Serial.println(pressureRead);
     Serial.print("Displaying humidity reading: ");
-    Serial.println(humiRes);
+    Serial.println(humidRead);
 
     //put into json format for mqtt
-    char msg[100];
-    snprintf(msg, sizeof(msg), "{\"temperature\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f}",
-           temperature, humidity, pressure);
+    char msg[128];
+    snprintf(msg, sizeof(msg), "{\"temperature\":%.2f,\"humidity\":%.2f}",
+           tempRead, humidRead);
+
+    Serial.print("Publishing: ");
+    Serial.println(msg);
 
     // Send through MQTT
     client.publish("sensor/bme280", msg);

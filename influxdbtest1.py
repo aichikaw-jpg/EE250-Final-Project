@@ -2,40 +2,29 @@ import json
 import pandas as pd
 import joblib
 import paho.mqtt.client as mqtt
-from influxdb import InfluxDBClient
-
-print("imports done")
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 # --------------------------------------------------
 # 1. LOAD MODEL + THRESHOLDS
 # --------------------------------------------------
-print("loading model")
 stress_model = joblib.load("plant_stress_model.pkl")
 thresholds = joblib.load("plant_thresholds.pkl")
-print("model and threshold finished loading")
 
 # --------------------------------------------------
 # 2. INFLUXDB SETTINGS
 # --------------------------------------------------
-print("setting up influx")
-INFLUX_HOST = "10.94.83.122"     # laptop IP if InfluxDB is on laptop
-INFLUX_PORT = 8086
-INFLUX_DB = "plant_data"
+INFLUX_URL = "http://localhost:8086"   # use localhost if InfluxDB is on the Pi
+INFLUX_TOKEN = "YOUR_INFLUXDB_TOKEN"
+INFLUX_ORG = "YOUR_ORG"
+INFLUX_BUCKET = "plant_data"
 
 influx_client = InfluxDBClient(
-    host=INFLUX_HOST,
-    port=INFLUX_PORT,
-    username="admin",
-    password="password",
-    ssl=True,
-    verify_ssl=False
+    url=INFLUX_URL,
+    token=INFLUX_TOKEN,
+    org=INFLUX_ORG
 )
-
-print("creating database")
-# create database if needed
-influx_client.create_database(INFLUX_DB)
-influx_client.switch_database(INFLUX_DB)
-print("influx setup finished")
+write_api = influx_client.write_api(write_options=SYNCHRONOUS)
 
 # --------------------------------------------------
 # 3. RULE-BASED LOGIC
@@ -95,15 +84,6 @@ def stress_level_code(stress_level):
     }
     return mapping.get(stress_level, -1)
 
-def environment_status_code(env_status):
-    mapping = {
-	"STABLE CONDITIONS": 0,
-	"MONITOR CONDITIONS": 1,
-	"MODERATE WATER DEMAND": 2,
-	"HIGH WATER DEMAND": 3
-    }
-    return mapping.get(env_status, -1)
-
 # --------------------------------------------------
 # 6. FULL SYSTEM
 # --------------------------------------------------
@@ -115,7 +95,6 @@ def plant_system(temp, humidity):
         "temperature": temp,
         "humidity": humidity,
         "environment_status": env_status,
-	"environment_status_code": environment_status_code(env_status),
         "stress_level": stress_level,
         "stress_score": float(stress_score),
         "stress_level_code": stress_level_code(stress_level)
@@ -125,29 +104,22 @@ def plant_system(temp, humidity):
 # 7. WRITE TO INFLUXDB
 # --------------------------------------------------
 def write_to_influx(result):
-    json_body = [
-        {
-            "measurement": "plant_monitor",
-            "tags": {
-                "environment_status": result["environment_status"],
-                "stress_level": result["stress_level"]
-            },
-            "fields": {
-                "temperature": float(result["temperature"]),
-                "humidity": float(result["humidity"]),
-                "stress_score": float(result["stress_score"]),
-                "stress_level_code": int(result["stress_level_code"]),
-		"environment_status_code": int(result["environment_status_code"])
-            }
-        }
-    ]
+    point = (
+        Point("plant_monitor")
+        .field("temperature", float(result["temperature"]))
+        .field("humidity", float(result["humidity"]))
+        .field("stress_score", float(result["stress_score"]))
+        .field("stress_level_code", int(result["stress_level_code"]))
+        .tag("environment_status", result["environment_status"])
+        .tag("stress_level", result["stress_level"])
+    )
 
-    influx_client.write_points(json_body)
+    write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
 
 # --------------------------------------------------
 # 8. MQTT SETTINGS
 # --------------------------------------------------
-MQTT_BROKER = "10.94.83.211"
+MQTT_BROKER = "10.94.83.211"     # change if needed
 MQTT_PORT = 1883
 MQTT_TOPIC = "sensor/bme280"
 
@@ -194,7 +166,6 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 
-print("About to connect to Mqtt Broker...")
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
 print("Waiting for MQTT messages...")
