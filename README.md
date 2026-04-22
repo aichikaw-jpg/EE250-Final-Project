@@ -10,3 +10,7 @@ Instructions:
 6) run the influxdbtest2.py on the raspberry pi, and pretty the EN button on the esp32 after the mqtt.ino has been uploaded.
 7) On a seperate terminal on your laptop, do sudo systemctl start grafana-server. Go to grafana and upload the given dashboard. 
 
+External Libraries used for Arduino IDE: 
+WiFi.h, PubSubClient.h, Wire.h, Adafruit_Sensor.h, Adafruit_BME280.h
+External Libraries used for mqtt, influxdb, machine learning:
+json, pandas, joblib, paho.mqtt.client, and influxdb
