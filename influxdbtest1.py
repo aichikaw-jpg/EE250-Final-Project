@@ -4,27 +4,38 @@ import joblib
 import paho.mqtt.client as mqtt
 from influxdb import InfluxDBClient
 
+print("imports done")
+
 # --------------------------------------------------
 # 1. LOAD MODEL + THRESHOLDS
 # --------------------------------------------------
+print("loading model")
 stress_model = joblib.load("plant_stress_model.pkl")
 thresholds = joblib.load("plant_thresholds.pkl")
+print("model and threshold finished loading")
 
 # --------------------------------------------------
 # 2. INFLUXDB SETTINGS
 # --------------------------------------------------
-INFLUX_HOST = "10.94.83.1"     # laptop IP if InfluxDB is on laptop
+print("setting up influx")
+INFLUX_HOST = "10.94.83.122"     # laptop IP if InfluxDB is on laptop
 INFLUX_PORT = 8086
 INFLUX_DB = "plant_data"
 
 influx_client = InfluxDBClient(
     host=INFLUX_HOST,
-    port=INFLUX_PORT
+    port=INFLUX_PORT,
+    username="admin",
+    password="password",
+    ssl=True,
+    verify_ssl=False
 )
 
+print("creating database")
 # create database if needed
 influx_client.create_database(INFLUX_DB)
 influx_client.switch_database(INFLUX_DB)
+print("influx setup finished")
 
 # --------------------------------------------------
 # 3. RULE-BASED LOGIC
@@ -84,6 +95,15 @@ def stress_level_code(stress_level):
     }
     return mapping.get(stress_level, -1)
 
+def environment_status_code(env_status):
+    mapping = {
+	"STABLE CONDITIONS": 0,
+	"MONITOR CONDITIONS": 1,
+	"MODERATE WATER DEMAND": 2,
+	"HIGH WATER DEMAND": 3
+    }
+    return mapping.get(env_status, -1)
+
 # --------------------------------------------------
 # 6. FULL SYSTEM
 # --------------------------------------------------
@@ -95,6 +115,7 @@ def plant_system(temp, humidity):
         "temperature": temp,
         "humidity": humidity,
         "environment_status": env_status,
+	"environment_status_code": environment_status_code(env_status),
         "stress_level": stress_level,
         "stress_score": float(stress_score),
         "stress_level_code": stress_level_code(stress_level)
@@ -115,7 +136,8 @@ def write_to_influx(result):
                 "temperature": float(result["temperature"]),
                 "humidity": float(result["humidity"]),
                 "stress_score": float(result["stress_score"]),
-                "stress_level_code": int(result["stress_level_code"])
+                "stress_level_code": int(result["stress_level_code"]),
+		"environment_status_code": int(result["environment_status_code"])
             }
         }
     ]
@@ -172,6 +194,7 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 
+print("About to connect to Mqtt Broker...")
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
 print("Waiting for MQTT messages...")
