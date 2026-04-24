@@ -2,12 +2,11 @@ import pandas as pd
 import joblib
 from sklearn.ensemble import IsolationForest
 
-# --------------------------------------------------
-# 1. LOAD DATA
-# --------------------------------------------------
+#loads the data from the dataset
 df = pd.read_csv("Indoor_Plant_Health_and_Growth_Factors.csv")
 df.columns = df.columns.str.strip()
 
+#gets the temperature and humidity
 df = df[[
     "Room_Temperature_C",
     "Humidity_%"
@@ -15,9 +14,8 @@ df = df[[
 
 print("Dataset shape:", df.shape)
 
-# --------------------------------------------------
-# 2. DATA-DRIVEN THRESHOLDS
-# --------------------------------------------------
+#give the weights for the temperature and humidity
+#quantile gives the percentage of the data
 temp_mild_hot = df["Room_Temperature_C"].quantile(0.65)
 temp_hot = df["Room_Temperature_C"].quantile(0.80)
 temp_very_hot = df["Room_Temperature_C"].quantile(0.90)
@@ -25,6 +23,7 @@ temp_very_hot = df["Room_Temperature_C"].quantile(0.90)
 hum_low = df["Humidity_%"].quantile(0.35)
 hum_very_low = df["Humidity_%"].quantile(0.20)
 
+#prints the thresholds
 print("\nTemperature thresholds:")
 print("Mild hot :", temp_mild_hot)
 print("Hot      :", temp_hot)
@@ -34,9 +33,7 @@ print("\nHumidity thresholds:")
 print("Low      :", hum_low)
 print("Very low :", hum_very_low)
 
-# --------------------------------------------------
-# 3. COMBINED THRESHOLD LOGIC
-# --------------------------------------------------
+#gets the environmental status through thresholding
 def decide_environment_status(temp, humidity, thresholds):
     stress = 0
 
@@ -63,9 +60,8 @@ def decide_environment_status(temp, humidity, thresholds):
     else:
         return "STABLE CONDITIONS"
 
-# --------------------------------------------------
-# 4. TRAIN ML MODEL
-# --------------------------------------------------
+#trains the machine learning model
+#gives number of estimators, number of data that is anomalies, and sets randomnness
 stress_model = IsolationForest(
     n_estimators=200,
     contamination=0.03,
@@ -73,9 +69,7 @@ stress_model = IsolationForest(
 )
 stress_model.fit(df)
 
-# --------------------------------------------------
-# 5. SAVE MODEL + THRESHOLDS
-# --------------------------------------------------
+#saves the thresholds
 thresholds = {
     "temp_mild_hot": temp_mild_hot,
     "temp_hot": temp_hot,
@@ -84,6 +78,7 @@ thresholds = {
     "hum_very_low": hum_very_low
 }
 
+#saves the model into plant_stress_model and plant_thresholds
 joblib.dump(stress_model, "plant_stress_model.pkl")
 joblib.dump(thresholds, "plant_thresholds.pkl")
 
