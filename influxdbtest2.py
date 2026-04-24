@@ -25,6 +25,7 @@ INFLUX_DB = "plant_data"
 #uses the username and password (which was admin and password in my case from the previous tig lab)
 #ssl=true uses https instead of http
 #verify_ssl=False allows it to not check for a certificate
+#ai was used to help debug this because of the https not working as well as the username and password
 influx_client = InfluxDBClient(
     host=INFLUX_HOST,
     port=INFLUX_PORT,
@@ -35,14 +36,12 @@ influx_client = InfluxDBClient(
 )
 
 print("creating database")
-# create database if needed
+#creates the database
 influx_client.create_database(INFLUX_DB)
 influx_client.switch_database(INFLUX_DB)
 print("influx setup finished")
 
-# --------------------------------------------------
-# 3. RULE-BASED LOGIC
-# --------------------------------------------------
+#helps to decide the environmental status 
 def decide_environment_status(temp, humidity, thresholds):
     stress = 0
 
@@ -69,17 +68,16 @@ def decide_environment_status(temp, humidity, thresholds):
     else:
         return "STABLE CONDITIONS"
 
-# --------------------------------------------------
-# 4. ML ASSESSMENT
-# --------------------------------------------------
+#creates a dataframe to be put into the machine learning 
 def assess_stress_level(temp, humidity):
     sample = pd.DataFrame([{
         "Room_Temperature_C": temp,
         "Humidity_%": humidity
     }])
-
+#use the created dataframe to get a score from the machine learning
     score = stress_model.decision_function(sample)[0]
 
+#determines the stress level based on the score
     if score < 0:
         return "SEVERE STRESS", score
     elif score < 0.05:
@@ -87,9 +85,10 @@ def assess_stress_level(temp, humidity):
     else:
         return "NORMAL RANGE", score
 
-# --------------------------------------------------
-# 5. OPTIONAL NUMERIC CODE FOR GRAFANA
-# --------------------------------------------------
+#grafana is not able to display strings so instead, the strings are converted to integer labels
+#this is done through mapping
+#ai was used to debug this
+#maps the stress levels, if none of hte values match, -1 is sent
 def stress_level_code(stress_level):
     mapping = {
         "NORMAL RANGE": 0,
@@ -98,6 +97,7 @@ def stress_level_code(stress_level):
     }
     return mapping.get(stress_level, -1)
 
+#maps the environmental status, if values don't match it sends -1
 def environment_status_code(env_status):
     mapping = {
 	"STABLE CONDITIONS": 0,
@@ -107,13 +107,11 @@ def environment_status_code(env_status):
     }
     return mapping.get(env_status, -1)
 
-# --------------------------------------------------
-# 6. FULL SYSTEM
-# --------------------------------------------------
+#gives the environmental status and stress level
 def plant_system(temp, humidity):
     env_status = decide_environment_status(temp, humidity, thresholds)
     stress_level, stress_score = assess_stress_level(temp, humidity)
-
+#sends back all the information
     return {
         "temperature": temp,
         "humidity": humidity,
@@ -124,9 +122,7 @@ def plant_system(temp, humidity):
         "stress_level_code": stress_level_code(stress_level)
     }
 
-# --------------------------------------------------
-# 7. WRITE TO INFLUXDB
-# --------------------------------------------------
+#writes the results to influxdb using json
 def write_to_influx(result):
     json_body = [
         {
@@ -147,54 +143,65 @@ def write_to_influx(result):
 
     influx_client.write_points(json_body)
 
-# --------------------------------------------------
-# 8. MQTT SETTINGS
-# --------------------------------------------------
+#MQTT Settings
+#give the raspberry pi ip
 MQTT_BROKER = "10.94.83.211"
 MQTT_PORT = 1883
 MQTT_TOPIC = "sensor/bme280"
 
-# --------------------------------------------------
-# 9. MQTT CALLBACKS
-# --------------------------------------------------
+#function to connect to the raspberry pi through mqtt
+#rc is the return code which tells whether or not it has worked or not
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connected to MQTT broker")
+		#subscribes to sensor/bme280
         client.subscribe(MQTT_TOPIC)
         print(f"Subscribed to topic: {MQTT_TOPIC}")
     else:
         print(f"Failed to connect, return code {rc}")
 
+#interprets the new sensor data received
+#ai was used to help with this
 def on_message(client, userdata, msg):
     try:
+		#decodes the mqtt message to string
         payload = msg.payload.decode()
         print(f"\nReceived MQTT message: {payload}")
 
+		#converts it into json
         data = json.loads(payload)
 
+		#extracts the temperature and humidity data
         temp = float(data["temperature"])
         humidity = float(data["humidity"])
 
+		#runs the ml model and gives the score to result
         result = plant_system(temp, humidity)
 
+		#prints the results out
         print("Plant assessment:")
         print(result)
 
+		#writes the results of the machine learning to influx
         write_to_influx(result)
         print("Data written to InfluxDB")
 
+	#prints out if an error was detected
     except KeyError as e:
+		#prints if the json is missing something
         print(f"Missing expected key in MQTT data: {e}")
+		#json is not valid
     except json.JSONDecodeError:
         print("Message was not valid JSON")
+		#any other errors that occur
     except Exception as e:
         print(f"Error processing message: {e}")
 
-# --------------------------------------------------
-# 10. START MQTT CLIENT
-# --------------------------------------------------
+#actually runs the mqtt by starting the client
 client = mqtt.Client()
+#connects
 client.on_connect = on_connect
+#when it receives the message, run message function
 client.on_message = on_message
 
 print("About to connect to Mqtt Broker...")
