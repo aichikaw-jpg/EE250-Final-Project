@@ -6,22 +6,25 @@ from influxdb import InfluxDBClient
 
 print("imports done")
 
-# --------------------------------------------------
-# 1. LOAD MODEL + THRESHOLDS
-# --------------------------------------------------
 print("loading model")
+#loads the machine learning models
 stress_model = joblib.load("plant_stress_model.pkl")
 thresholds = joblib.load("plant_thresholds.pkl")
 print("model and threshold finished loading")
 
-# --------------------------------------------------
-# 2. INFLUXDB SETTINGS
-# --------------------------------------------------
 print("setting up influx")
-INFLUX_HOST = "10.94.83.122"     # laptop IP if InfluxDB is on laptop
+#sets up the influxdb
+#change to laptop IP if influxdb is supposed to be run on the laptop
+INFLUX_HOST = "10.94.83.122"     
+#sets the influxdb port
 INFLUX_PORT = 8086
 INFLUX_DB = "plant_data"
 
+#creates an influxdb client that connects to the influxdb server
+#uses the influxdb host and port that was given earlier
+#uses the username and password (which was admin and password in my case from the previous tig lab)
+#ssl=true uses https instead of http
+#verify_ssl=False allows it to not check for a certificate
 influx_client = InfluxDBClient(
     host=INFLUX_HOST,
     port=INFLUX_PORT,
