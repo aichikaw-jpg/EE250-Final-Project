@@ -11,6 +11,7 @@ Instructions:
 7) Now in the influxdbtest2.py, change the INFLUX_HOST to be your laptop ip. In the influx_client, change the username and password to be your influxdb username and password. You can leave it out, if you don't have it. Change the MQTT_BROKER to have your raspberry pi ip.
 8) Run the influxdbtest2.py on your raspberry pi by doing python3 influxdbtest2.py
 9) On a seperate terminal on your laptop, do sudo systemctl start grafana-server. Go to grafana and upload the given dashboard: Plant Monitor-1776998171411.json
+10) Also make sure for the grafana that the data source is editted to have your laptop ip if that is where your influxdb is run
 
 External Libraries used for Arduino IDE: 
 WiFi.h, PubSubClient.h, Wire.h, Adafruit_Sensor.h, Adafruit_BME280.h
