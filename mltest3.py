@@ -33,33 +33,6 @@ print("\nHumidity thresholds:")
 print("Low      :", hum_low)
 print("Very low :", hum_very_low)
 
-#gets the environmental status through thresholding
-def decide_environment_status(temp, humidity, thresholds):
-    stress = 0
-
-    if temp >= thresholds["temp_very_hot"]:
-        stress += 3
-    elif temp >= thresholds["temp_hot"]:
-        stress += 2
-    elif temp >= thresholds["temp_mild_hot"]:
-        stress += 1
-
-    if humidity <= thresholds["hum_very_low"]:
-        stress += 3
-    elif humidity <= thresholds["hum_low"]:
-        stress += 2
-    elif humidity <= thresholds["hum_low"] + 5:
-        stress += 1
-
-    if stress >= 5:
-        return "HIGH WATER DEMAND"
-    elif stress >= 3:
-        return "MODERATE WATER DEMAND"
-    elif stress >= 1:
-        return "MONITOR CONDITIONS"
-    else:
-        return "STABLE CONDITIONS"
-
 #trains the machine learning model
 #gives number of estimators, number of data that is anomalies, and sets randomnness
 stress_model = IsolationForest(
